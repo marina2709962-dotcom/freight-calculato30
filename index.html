@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Freight Calculator PRO</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
@@ -122,9 +123,56 @@ select option{background:var(--steel-mid);}
 .calc-subtotal{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;text-align:right;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
 .calc-subtotal.rail{color:var(--rail);}.calc-subtotal.tent{color:var(--tent);}.calc-subtotal.auto{color:var(--auto);}
 .tpl-filter-bar{background:var(--steel-mid);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;}
+
+/* ---- Auth screen ---- */
+.auth-overlay{position:fixed;inset:0;background:var(--steel);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.auth-box{background:var(--steel-mid);border:1px solid var(--accent);border-radius:16px;padding:36px 32px;width:100%;max-width:400px;text-align:center;}
+.auth-logo{font-size:48px;margin-bottom:12px;}
+.auth-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;}
+.auth-sub{font-size:12px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;}
+.auth-input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px 14px;font-size:14px;font-family:'Barlow',sans-serif;outline:none;margin-bottom:12px;transition:border-color .2s;}
+.auth-input:focus{border-color:var(--accent);}
+.auth-btn{width:100%;background:var(--accent);color:#000;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:12px;border:none;border-radius:8px;cursor:pointer;transition:background .15s;margin-bottom:8px;}
+.auth-btn:hover{background:#e8960a;}
+.auth-btn:disabled{background:var(--steel-light);color:var(--muted);cursor:not-allowed;}
+.auth-err{color:var(--red);font-size:12px;margin-top:6px;min-height:18px;}
+.auth-user-bar{background:var(--steel-mid);border-bottom:1px solid var(--border);padding:6px 22px;display:flex;align-items:center;gap:12px;font-size:12px;}
+.auth-user-email{color:var(--muted);}
+.auth-user-badge{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:2px 10px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.sync-indicator{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+.sync-dot.syncing{background:var(--accent);animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
 </style>
 </head>
 <body>
+
+
+<!-- AUTH OVERLAY -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-logo">&#128642;</div>
+    <div class="auth-title">Freight Calculator PRO</div>
+    <div class="auth-sub">&#1054;&#1073;&#1097;&#1080;&#1081; &#1082;&#1072;&#1073;&#1080;&#1085;&#1077;&#1090; &#1082;&#1086;&#1084;&#1072;&#1085;&#1076;&#1099;</div>
+    <input class="auth-input" id="authEmail" type="email" placeholder="Email" autocomplete="email">
+    <input class="auth-input" id="authPassword" type="password" placeholder="&#1055;&#1072;&#1088;&#1086;&#1083;&#1100;" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="auth-btn" id="authBtn" onclick="doLogin()">&#1042;&#1086;&#1081;&#1090;&#1080;</button>
+    <div class="auth-err" id="authErr"></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:12px;">&#1047;&#1072;&#1073;&#1099;&#1083;&#1080; &#1087;&#1072;&#1088;&#1086;&#1083;&#1100;? &#1054;&#1073;&#1088;&#1072;&#1090;&#1080;&#1090;&#1077;&#1089;&#1100; &#1082; &#1072;&#1076;&#1084;&#1080;&#1085;&#1080;&#1089;&#1090;&#1088;&#1072;&#1090;&#1086;&#1088;&#1091;</div>
+  </div>
+</div>
+
+<!-- USER BAR (shown when logged in) -->
+<div class="auth-user-bar" id="userBar" style="display:none">
+  <span class="auth-user-badge">&#128100; &#1054;&#1085;&#1083;&#1072;&#1081;&#1085;</span>
+  <span class="auth-user-email" id="userEmail"></span>
+  <span class="sync-indicator" id="syncIndicator"><span class="sync-dot" id="syncDot"></span> &#1057;&#1080;&#1085;&#1093;&#1088;&#1086;&#1085;&#1080;&#1079;&#1072;&#1094;&#1080;&#1103;</span>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn btn-secondary btn-sm" onclick="showTeamInfo()">&#128101; &#1050;&#1086;&#1084;&#1072;&#1085;&#1076;&#1072;</button>
+    <button class="btn btn-danger btn-sm" onclick="doLogout()">&#1042;&#1099;&#1081;&#1090;&#1080;</button>
+  </div>
+</div>
 
 <div class="train-header">
   <div class="header-inner">
@@ -408,7 +456,7 @@ select option{background:var(--steel-mid);}
     <select id="historyFilterLine" onchange="renderHistory()" style="max-width:140px;padding:6px 10px"><option value="">&#1042;&#1089;&#1077; &#1083;&#1080;&#1085;&#1080;&#1080;</option></select>
     <select id="historyFilterTransport" onchange="renderHistory()" style="max-width:140px;padding:6px 10px"><option value="">&#1042;&#1089;&#1077; &#1090;&#1088;&#1072;&#1085;&#1089;&#1087;.</option><option>&#1040;&#1074;&#1090;&#1086;</option><option>&#1058;&#1077;&#1085;&#1090;</option><option>&#1046;&#1044;</option></select>
   </div>
-  <table class="history-table"><thead><tr><th>&#1044;&#1072;&#1090;&#1072;</th><th>&#1050;&#1083;&#1080;&#1077;&#1085;&#1090;</th><th>&#1041;&#1091;&#1082;&#1080;&#1085;&#1075;</th><th>&#1051;&#1080;&#1085;&#1080;&#1103;</th><th>&#1058;&#1088;&#1072;&#1085;&#1089;&#1087;.</th><th>&#1048;&#1090;&#1086;&#1075;&#1086; USD</th><th></th></tr></thead><tbody id="historyBody"></tbody></table>
+  <table class="history-table"><thead><tr><th>&#1044;&#1072;&#1090;&#1072;</th><th>&#1050;&#1083;&#1080;&#1077;&#1085;&#1090;</th><th>&#1041;&#1091;&#1082;&#1080;&#1085;&#1075;</th><th>&#1051;&#1080;&#1085;&#1080;&#1103;</th><th>&#1058;&#1088;&#1072;&#1085;&#1089;&#1087;.</th><th>&#1055;&#1086;&#1083;&#1100;&#1079;&#1086;&#1074;&#1072;&#1090;&#1077;&#1083;&#1100;</th><th>&#1048;&#1090;&#1086;&#1075;&#1086; USD</th><th></th></tr></thead><tbody id="historyBody"></tbody></table>
 </div>
 </div>
 
@@ -428,6 +476,262 @@ select option{background:var(--steel-mid);}
   <div class="btn-row"><button class="btn btn-primary" onclick="confirmCopyTpl()">&#1050;&#1086;&#1087;&#1080;&#1088;&#1086;&#1074;&#1072;&#1090;&#1100;</button><button class="btn btn-secondary" onclick="closeModal('modalCopyTpl')">&#1054;&#1090;&#1084;&#1077;&#1085;&#1072;</button></div>
 </div></div>
 <script>
+
+// ============================================================
+// SUPABASE INIT
+// ============================================================
+const SUPABASE_URL = 'https://oftahivozqhfgcivohao.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_adUsFyBXkBFbbzpaTIq4YQ_o1kzVoRQ';
+const WORKSPACE_ID = 'main'; // одна команда = один workspace
+
+let sb = null;
+let currentUser = null;
+
+async function initSupabase() {
+  try {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      currentUser = session.user;
+      showApp();
+    } else {
+      showLogin();
+    }
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        currentUser = session.user;
+        showApp();
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null;
+        showLogin();
+      }
+    });
+  } catch(e) {
+    console.error('Supabase init error:', e);
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById('authOverlay').style.display = 'flex';
+  document.getElementById('userBar').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('authOverlay').style.display = 'none';
+  document.getElementById('userBar').style.display = 'flex';
+  document.getElementById('userEmail').textContent = currentUser?.email || '';
+  loadLines(); loadPorts();
+  if (!document.querySelectorAll('.route-card').length) addRoute();
+  loadAllTemplateBlocks();
+  setupAutosave();
+  filterRailRates();
+  syncFromCloud();
+}
+
+async function doLogin() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const btn = document.getElementById('authBtn');
+  const err = document.getElementById('authErr');
+  if (!email || !password) { err.textContent = '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 email \u0438 \u043f\u0430\u0440\u043e\u043b\u044c'; return; }
+  btn.disabled = true; btn.textContent = '\u0412\u0445\u043e\u0436\u0443...'; err.textContent = '';
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  } catch(e) {
+    err.textContent = e.message.includes('Invalid') ? '\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 email \u0438\u043b\u0438 \u043f\u0430\u0440\u043e\u043b\u044c' : e.message;
+    btn.disabled = false; btn.textContent = '\u0412\u043e\u0439\u0442\u0438';
+  }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+}
+
+function setSyncState(syncing) {
+  const dot = document.getElementById('syncDot');
+  if (dot) dot.className = 'sync-dot' + (syncing ? ' syncing' : '');
+}
+
+function showTeamInfo() {
+  alert('\u0412\u0430\u0448 \u043a\u0430\u0431\u0438\u043d\u0435\u0442: main\n\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u0439: Supabase Dashboard \u2192 Authentication \u2192 Users \u2192 Invite user');
+}
+
+// ============================================================
+// CLOUD SYNC — Templates
+// ============================================================
+async function saveTemplateToCloud(line, port, ctype, transport, items) {
+  if (!sb || !currentUser) return;
+  setSyncState(true);
+  try {
+    const { error } = await sb.from('templates').upsert({
+      workspace_id: WORKSPACE_ID,
+      line, port: port||'', ctype: ctype||'ALL', transport,
+      items: items,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'workspace_id,line,port,ctype,transport' });
+    if (error) console.error('Save template error:', error);
+  } catch(e) { console.error(e); }
+  setSyncState(false);
+}
+
+async function loadTemplateFromCloud(line, port, ctype, transport) {
+  if (!sb || !currentUser) return null;
+  try {
+    const { data, error } = await sb.from('templates')
+      .select('items')
+      .eq('workspace_id', WORKSPACE_ID)
+      .eq('line', line)
+      .eq('port', port||'')
+      .eq('ctype', ctype||'ALL')
+      .eq('transport', transport)
+      .single();
+    if (error || !data) return null;
+    return data.items;
+  } catch(e) { return null; }
+}
+
+// ============================================================
+// CLOUD SYNC — Rail Rates
+// ============================================================
+async function saveRailRateToCloud(line, port, dirObj) {
+  if (!sb || !currentUser) return;
+  setSyncState(true);
+  try {
+    const { error } = await sb.from('rail_rates').insert({
+      workspace_id: WORKSPACE_ID,
+      line: dirObj.line || line,
+      port: port||'',
+      from_city: dirObj.from,
+      to_city: dirObj.to,
+      ctype: dirObj.ctype,
+      price: dirObj.price,
+      last_mile: dirObj.lastMile || null
+    });
+    if (error) console.error('Save rail rate error:', error);
+  } catch(e) { console.error(e); }
+  setSyncState(false);
+}
+
+async function deleteRailRateFromCloud(line, port, from_city, to_city, ctype) {
+  if (!sb || !currentUser) return;
+  try {
+    await sb.from('rail_rates')
+      .delete()
+      .eq('workspace_id', WORKSPACE_ID)
+      .eq('line', line)
+      .eq('from_city', from_city)
+      .eq('to_city', to_city)
+      .eq('ctype', ctype);
+  } catch(e) { console.error(e); }
+}
+
+async function loadAllRailRatesFromCloud() {
+  if (!sb || !currentUser) return [];
+  try {
+    const { data, error } = await sb.from('rail_rates')
+      .select('*')
+      .eq('workspace_id', WORKSPACE_ID)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data.map(r => ({
+      from: r.from_city, to: r.to_city, ctype: r.ctype,
+      line: r.line, price: r.price, lastMile: r.last_mile,
+      _storeLine: r.line, _storePort: r.port, _id: r.id
+    }));
+  } catch(e) { return []; }
+}
+
+// ============================================================
+// CLOUD SYNC — History / Calculations
+// ============================================================
+async function saveCalcToCloud(record) {
+  if (!sb || !currentUser) return;
+  setSyncState(true);
+  try {
+    await sb.from('calculations').insert({
+      workspace_id: WORKSPACE_ID,
+      created_by: currentUser.id,
+      created_by_email: currentUser.email,
+      date: record.date,
+      client: record.client,
+      booking: record.booking,
+      line: record.line,
+      port: record.port,
+      transport: record.transport,
+      total: record.total,
+      margin: record.margin,
+      routes: record.routes,
+      costs: record.costs
+    });
+  } catch(e) { console.error(e); }
+  setSyncState(false);
+}
+
+async function loadCalcsFromCloud() {
+  if (!sb || !currentUser) return [];
+  try {
+    const { data, error } = await sb.from('calculations')
+      .select('*')
+      .eq('workspace_id', WORKSPACE_ID)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error || !data) return [];
+    return data.map(r => ({
+      date: r.date, client: r.client, booking: r.booking,
+      line: r.line, port: r.port, transport: r.transport,
+      total: r.total, margin: r.margin,
+      routes: r.routes, costs: r.costs,
+      createdByEmail: r.created_by_email,
+      id: r.id
+    }));
+  } catch(e) { return []; }
+}
+
+async function deleteCalcFromCloud(id) {
+  if (!sb || !currentUser || !id) return;
+  try { await sb.from('calculations').delete().eq('id', id); } catch(e) {}
+}
+
+// ============================================================
+// CLOUD SYNC — Settings (lines/ports)
+// ============================================================
+async function saveSettingsToCloud(lines, ports) {
+  if (!sb || !currentUser) return;
+  try {
+    await sb.from('workspace_settings').upsert({
+      workspace_id: WORKSPACE_ID,
+      lines, ports,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'workspace_id' });
+  } catch(e) { console.error(e); }
+}
+
+async function loadSettingsFromCloud() {
+  if (!sb || !currentUser) return null;
+  try {
+    const { data } = await sb.from('workspace_settings')
+      .select('lines,ports')
+      .eq('workspace_id', WORKSPACE_ID)
+      .single();
+    return data;
+  } catch(e) { return null; }
+}
+
+async function syncFromCloud() {
+  // Load lines/ports from cloud
+  const settings = await loadSettingsFromCloud();
+  if (settings) {
+    if (settings.lines?.length) { localStorage.setItem('fc_lines', JSON.stringify(settings.lines)); }
+    if (settings.ports?.length) { localStorage.setItem('fc_ports', JSON.stringify(settings.ports)); }
+    loadLines(); loadPorts();
+    renderLinesChips(); renderPortsChips();
+  }
+  // Refresh rail rates display
+  filterRailRates();
+}
+
 // === DEFAULTS ===
 const DEFAULT_LINES=["MAERSK","MSC","CMA CGM","HAPAG-LLOYD","COSCO"];
 const DEFAULT_PORTS=["Shanghai, CN","Ningbo, CN","Qingdao, CN","Guangzhou, CN","Tianjin, CN","Busan, KR","Singapore, SG","Rotterdam, NL","Hamburg, DE"];
@@ -482,10 +786,15 @@ function fallbackCopy(url,cb){
 }
 function loadStateFromHash(){if(!location.hash||!location.hash.startsWith('#state='))return false;try{const s=JSON.parse(decodeURIComponent(escape(atob(location.hash.slice(7)))));if(s.client)SV('client',s.client);if(s.booking)SV('booking',s.booking);if(s.portLoad)SV('portLoad',s.portLoad);if(s.margin){SV('margin',s.margin);SV('marginInternal',s.margin);}if(s.line)setTimeout(()=>{const sel=document.getElementById('line');if(sel&&[...sel.options].some(o=>o.value===s.line))sel.value=s.line;},60);if(s.routes&&s.routes.length){document.getElementById('routes').innerHTML='';routeCounter=0;s.routes.forEach(rt=>{addRoute();const c=document.querySelectorAll('.route-card');const card=c[c.length-1];card.querySelector('.r-from').value=rt.from||'';card.querySelector('.r-to').value=rt.to||'';if(rt.ctype)card.querySelector('.r-ctype').value=rt.ctype;card.querySelector('.r-qty').value=rt.qty||1;if(rt.transport)card.querySelector('.r-transport').value=rt.transport;});}if(s.costs&&s.costs.length){['rail','tent','auto','common'].forEach(t=>document.getElementById('costBody-'+t).innerHTML='');s.costs.forEach(c=>addCostRowToPanel(c.name,c.value,c.currency,c.perUnit,c.transport||'common'));}document.getElementById('sharedModeBanner').style.display='flex';return true;}catch(e){return false;}}
 
-window.onload=()=>{loadLines();loadPorts();const fromHash=loadStateFromHash();if(!fromHash){restoreAutosave();if(!document.querySelectorAll('.route-card').length)addRoute();}else{if(!document.querySelectorAll('.route-card').length)addRoute();}loadAllTemplateBlocks();if(location.hash==='#history'){document.querySelectorAll('.tab')[2].click();document.getElementById('publicHistoryBanner').style.display='flex';}setupAutosave();filterRailRates();};
+window.onload=()=>{
+  const fromHash=loadStateFromHash();
+  if(fromHash){if(!document.querySelectorAll('.route-card').length)addRoute();}
+  initSupabase();
+  if(location.hash==='#history'){setTimeout(()=>{document.querySelectorAll('.tab')[2].click();document.getElementById('publicHistoryBanner').style.display='flex';},800);}
+};
 
 // === TABS ===
-function switchTab(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.getElementById('tab-'+name).classList.add('active');el.classList.add('active');if(name==='templates')refreshTemplatesTab();if(name==='history')renderHistory();}
+function switchTab(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.getElementById('tab-'+name).classList.add('active');el.classList.add('active');if(name==='templates')refreshTemplatesTab();if(name==='history'){if(sb&&currentUser)renderHistoryCloud();else renderHistory();}}
 function copyHistoryLink(){const url=location.href.split('#')[0]+'#history';if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>{const btn=event.target;const orig=btn.innerHTML;btn.textContent='\u2713!';btn.style.background='var(--green)';btn.style.color='#000';setTimeout(()=>{btn.innerHTML=orig;btn.style.background='';btn.style.color='';},2000);});}else{prompt('',url);}}
 
 // === COST TABS ===
@@ -494,9 +803,9 @@ function addCostRowActive(){addCostRowToPanel('','','USD',true,window._activeCos
 
 // === LINES & PORTS ===
 function getLines(){return JSON.parse(localStorage.getItem('fc_lines')||JSON.stringify(DEFAULT_LINES));}
-function saveLines(l){localStorage.setItem('fc_lines',JSON.stringify(l));}
+function saveLines(l){localStorage.setItem('fc_lines',JSON.stringify(l));if(sb&&currentUser)saveSettingsToCloud(l,getPorts());}
 function getPorts(){return JSON.parse(localStorage.getItem('fc_ports')||JSON.stringify(DEFAULT_PORTS));}
-function savePorts(p){localStorage.setItem('fc_ports',JSON.stringify(p));}
+function savePorts(p){localStorage.setItem('fc_ports',JSON.stringify(p));if(sb&&currentUser)saveSettingsToCloud(getLines(),p);}
 function loadLines(){const lines=getLines();['line','copyToLine','newRailLine'].forEach(id=>{const el=document.getElementById(id);if(!el)return;const prev=el.value;el.innerHTML='';lines.forEach(l=>{const o=document.createElement('option');o.textContent=l;o.value=l;el.appendChild(o);});if(prev&&lines.includes(prev))el.value=prev;});const rl=document.getElementById('railLookupLine');if(rl){const prev=rl.value;rl.innerHTML='<option value="">\u0412\u0441\u0435</option>';lines.forEach(l=>{const o=document.createElement('option');o.textContent=l;o.value=l;rl.appendChild(o);});if(prev)rl.value=prev;}const tl=document.getElementById('tplLine');if(tl){const prev=tl.value;tl.innerHTML='';lines.forEach(l=>{const o=document.createElement('option');o.textContent=l;o.value=l;tl.appendChild(o);});if(prev&&lines.includes(prev))tl.value=prev;}}
 function loadPorts(){const ports=getPorts();['portLoadList','tplPortList'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.innerHTML='';ports.forEach(p=>{const o=document.createElement('option');o.value=p;el.appendChild(o);});});}
 function openAddLineModal(){document.getElementById('modalAddLine').classList.add('open');document.getElementById('modalLineInput').value='';setTimeout(()=>document.getElementById('modalLineInput').focus(),100);}
@@ -516,19 +825,42 @@ function saveTemplateStore(line,port,ctype,transport,items){localStorage.setItem
 function getRailDirKey(line,port){return'fc_rail_dirs__'+(line||'')+'__'+(port||'');}
 function getRailDirs(line,port){try{return JSON.parse(localStorage.getItem(getRailDirKey(line,port))||'[]');}catch(e){return[];}}
 function saveRailDirs(line,port,dirs){localStorage.setItem(getRailDirKey(line,port),JSON.stringify(dirs));}
-function addRailDirCard(){const line=V('tplLine'),port=V('tplPort'),from=document.getElementById('newRailFrom').value.trim(),to=document.getElementById('newRailTo').value.trim();const ctype=V('newRailCtype'),lineVal=V('newRailLine'),price=parseFloat(V('newRailPrice'))||0,lastCtype=V('newRailLastCtype'),lastRoute=document.getElementById('newRailLastRoute').value.trim(),lastPrice=parseFloat(V('newRailLastPrice'))||0;if(!from||!to){alert('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u043e\u0442\u043a\u0443\u0434\u0430 \u0438 \u043a\u0443\u0434\u0430');return;}const dirs=getRailDirs(line,port);dirs.push({from,to,ctype,line:lineVal,price,lastMile:lastRoute?{ctype:lastCtype,route:lastRoute,price:lastPrice}:null});saveRailDirs(line,port,dirs);['newRailFrom','newRailTo','newRailPrice','newRailLastRoute','newRailLastPrice'].forEach(id=>SV(id,''));SV('newRailLastCtype','');renderRailDirCards();filterRailRates();}
+function addRailDirCard(){const line=V('tplLine'),port=V('tplPort'),from=document.getElementById('newRailFrom').value.trim(),to=document.getElementById('newRailTo').value.trim();const ctype=V('newRailCtype'),lineVal=V('newRailLine'),price=parseFloat(V('newRailPrice'))||0,lastCtype=V('newRailLastCtype'),lastRoute=document.getElementById('newRailLastRoute').value.trim(),lastPrice=parseFloat(V('newRailLastPrice'))||0;if(!from||!to){alert('\u0423\u043a\u0430\u0436\u0438\u0442\u0435 \u043e\u0442\u043a\u0443\u0434\u0430 \u0438 \u043a\u0443\u0434\u0430');return;}const dir={from,to,ctype,line:lineVal,price,lastMile:lastRoute?{ctype:lastCtype,route:lastRoute,price:lastPrice}:null};const dirs=getRailDirs(line,port);dirs.push(dir);saveRailDirs(line,port,dirs);saveRailRateToCloud(line,port,dir);['newRailFrom','newRailTo','newRailPrice','newRailLastRoute','newRailLastPrice'].forEach(id=>SV(id,''));SV('newRailLastCtype','');renderRailDirCards();filterRailRates();}
 function removeRailDir(idx){const line=V('tplLine'),port=V('tplPort');const dirs=getRailDirs(line,port);dirs.splice(idx,1);saveRailDirs(line,port,dirs);renderRailDirCards();filterRailRates();}
 function renderRailDirCards(){const line=V('tplLine'),port=V('tplPort');const dirs=getRailDirs(line,port);const wrap=document.getElementById('railDirCards');wrap.innerHTML='';if(!dirs.length){wrap.innerHTML='<div style="font-size:11px;color:var(--muted);padding:8px">\u041d\u0435\u0442 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0439.</div>';return;}dirs.forEach((d,i)=>{const div=document.createElement('div');div.className='rail-dir-card';let lm='';if(d.lastMile){lm='<div style="font-size:10px;color:var(--muted);margin-top:4px">&#x1F69B; \u041f\u043e\u0441\u043b. \u043c\u0438\u043b\u044f: '+esc(d.lastMile.route)+(d.lastMile.ctype?' &middot; '+esc(d.lastMile.ctype):'')+' &mdash; <b style="color:var(--accent)">$'+(d.lastMile.price||0).toLocaleString()+'</b></div>';}div.innerHTML='<button class="rail-dir-del" onclick="removeRailDir('+i+')">&times;</button><div class="rail-rate-route">'+esc(d.from)+' &rarr; '+esc(d.to)+'</div><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><span class="badge badge-amber">'+esc(d.ctype)+'</span><span class="badge badge-blue">'+esc(d.line||line)+'</span><span style="font-family:\'Barlow Condensed\',sans-serif;font-size:15px;font-weight:700;color:var(--rail);margin-left:auto">$'+(d.price||0).toLocaleString()+'</span></div>'+lm;wrap.appendChild(div);});}
-function filterRailRates(){const from=(document.getElementById('railLookupFrom')?.value||'').toLowerCase(),to=(document.getElementById('railLookupTo')?.value||'').toLowerCase(),ctype=V('railLookupCtype'),lineFilter=V('railLookupLine');const allDirs=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('fc_rail_dirs__')){try{const dirs=JSON.parse(localStorage.getItem(k)||'[]'),parts=k.replace('fc_rail_dirs__','').split('__');dirs.forEach(d=>allDirs.push({...d,_sL:parts[0],_sP:parts[1]}));}catch(e){}}}let filtered=allDirs;if(from)filtered=filtered.filter(d=>(d.from||'').toLowerCase().includes(from));if(to)filtered=filtered.filter(d=>(d.to||'').toLowerCase().includes(to));if(ctype)filtered=filtered.filter(d=>d.ctype===ctype);if(lineFilter)filtered=filtered.filter(d=>(d.line||d._sL||'').toLowerCase().includes(lineFilter.toLowerCase()));const wrap=document.getElementById('railRatesResults');if(!wrap)return;wrap.innerHTML='';if(!filtered.length){wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-align:center;padding:16px">\u041d\u0435\u0442 \u0441\u0442\u0430\u0432\u043e\u043a. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0432 \u0448\u0430\u0431\u043b\u043e\u043d\u0430\u0445 &rarr;</div>';return;}filtered.forEach((d)=>{const card=document.createElement('div');card.className='rail-rate-card';let lm='';if(d.lastMile)lm='<div style="font-size:10px;color:var(--muted)">+ \u043c\u0438\u043b\u044f '+esc(d.lastMile.route)+': $'+(d.lastMile.price||0)+'</div>';card.innerHTML='<div><div class="rail-rate-route">'+esc(d.from)+' &rarr; '+esc(d.to)+'</div><div style="display:flex;gap:5px;margin-top:3px"><span class="badge badge-amber">'+esc(d.ctype)+'</span><span class="badge badge-blue">'+esc(d.line||d._sL||'')+'</span></div>'+lm+'</div><div class="rail-rate-price">$'+(d.price||0).toLocaleString()+'</div>';card.onclick=()=>{document.querySelectorAll('.rail-rate-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');window._selectedRailRate=d;document.getElementById('railRateSelectedInfo').textContent=d.from+' \u2192 '+d.to+' \u00b7 '+d.ctype+' \u00b7 $'+(d.price||0).toLocaleString();};wrap.appendChild(card);});}
+async function filterRailRates(){
+  const from=(document.getElementById('railLookupFrom')?.value||'').toLowerCase(),
+        to=(document.getElementById('railLookupTo')?.value||'').toLowerCase(),
+        ctype=V('railLookupCtype'),lineFilter=V('railLookupLine');
+  const wrap=document.getElementById('railRatesResults');if(!wrap)return;
+
+  // Load from cloud if logged in, else localStorage
+  let allDirs=[];
+  if(sb&&currentUser){
+    allDirs=await loadAllRailRatesFromCloud();
+  } else {
+    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('fc_rail_dirs__')){try{const dirs=JSON.parse(localStorage.getItem(k)||'[]'),parts=k.replace('fc_rail_dirs__','').split('__');dirs.forEach(d=>allDirs.push({...d,_sL:parts[0],_sP:parts[1]}));}catch(e){}}}
+  }
+
+  let filtered=allDirs;
+  if(from)filtered=filtered.filter(d=>(d.from||'').toLowerCase().includes(from));
+  if(to)filtered=filtered.filter(d=>(d.to||'').toLowerCase().includes(to));
+  if(ctype)filtered=filtered.filter(d=>d.ctype===ctype);
+  if(lineFilter)filtered=filtered.filter(d=>(d.line||d._sL||'').toLowerCase().includes(lineFilter.toLowerCase()));
+
+  wrap.innerHTML='';
+  if(!filtered.length){wrap.innerHTML='<div style="font-size:11px;color:var(--muted);text-align:center;padding:16px">\u041d\u0435\u0442 \u0441\u0442\u0430\u0432\u043e\u043a. \u0414\u043e\u0431\u0430\u0432\u044c\u0442\u0435 \u0432 \u0448\u0430\u0431\u043b\u043e\u043d\u0430\u0445 &rarr;</div>';return;}
+  filtered.forEach((d)=>{const card=document.createElement('div');card.className='rail-rate-card';let lm='';if(d.lastMile)lm='<div style="font-size:10px;color:var(--muted)">+ \u043c\u0438\u043b\u044f '+esc(d.lastMile.route)+': $'+(d.lastMile.price||0)+'</div>';card.innerHTML='<div><div class="rail-rate-route">'+esc(d.from)+' &rarr; '+esc(d.to)+'</div><div style="display:flex;gap:5px;margin-top:3px"><span class="badge badge-amber">'+esc(d.ctype)+'</span><span class="badge badge-blue">'+esc(d.line||d._sL||'')+'</span></div>'+lm+'</div><div class="rail-rate-price">$'+(d.price||0).toLocaleString()+'</div>';card.onclick=()=>{document.querySelectorAll('.rail-rate-card').forEach(c=>c.classList.remove('selected'));card.classList.add('selected');window._selectedRailRate=d;document.getElementById('railRateSelectedInfo').textContent=d.from+' \u2192 '+d.to+' \u00b7 '+d.ctype+' \u00b7 $'+(d.price||0).toLocaleString();};wrap.appendChild(card);});
+}
 function applySelectedRailRate(){const d=window._selectedRailRate;if(!d){alert('\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0442\u0430\u0432\u043a\u0443');return;}addCostRowToPanel('\u0416\u0414 \u0442\u0430\u0440\u0438\u0444 ('+d.from+' \u2192 '+d.to+')',d.price,'USD',false,'rail');if(d.lastMile&&d.lastMile.price)addCostRowToPanel('\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u044f\u044f \u043c\u0438\u043b\u044f ('+d.lastMile.route+')',d.lastMile.price,'USD',false,'rail');switchCostTab('rail');document.getElementById('railRateSelectedInfo').textContent='\u2713 \u041f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u043e!';setTimeout(()=>{document.getElementById('railRateSelectedInfo').textContent='';},2000);}
 function toggleTplBlock(t){const body=document.getElementById('tplBody-'+t+'-wrap'),arrow=document.getElementById('arrow-'+t),isOpen=!body.classList.contains('collapsed');body.classList.toggle('collapsed',isOpen);arrow.classList.toggle('open',!isOpen);}
 function loadAllTemplateBlocks(){['rail','tent','auto'].forEach(t=>loadTplBlock(t));const line=V('tplLine'),port=V('tplPort');document.getElementById('tplEditorTitle').textContent=line+(port?' / '+port:'');renderRailDirCards();}
-function loadTplBlock(transport){const line=V('tplLine'),port=V('tplPort'),ctype=V('tplCtype-'+transport)||'ALL';if(!line)return;renderTplTable(transport,getTemplate(line,port,ctype,transport));}
+async function loadTplBlock(transport){const line=V('tplLine'),port=V('tplPort'),ctype=V('tplCtype-'+transport)||'ALL';if(!line)return;if(sb&&currentUser){const cloudItems=await loadTemplateFromCloud(line,port,ctype,transport);if(cloudItems&&cloudItems.length){renderTplTable(transport,cloudItems);return;}}renderTplTable(transport,getTemplate(line,port,ctype,transport));}
 function renderTplTable(transport,items){const tbody=document.getElementById('tplBody-'+transport);if(!tbody)return;tbody.innerHTML='';items.forEach((item,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td><input value="'+esc(item.name)+'" data-f="name"></td><td><input type="number" value="'+(item.value||'')+'" data-f="value" placeholder="0"></td><td><select data-f="currency"><option'+(item.currency==='USD'?' selected':'')+'>USD</option><option'+(item.currency==='EUR'?' selected':'')+'>EUR</option><option'+(item.currency==='UAH'?' selected':'')+'>UAH</option></select></td><td style="text-align:center"><input type="checkbox" data-f="perUnit" '+(item.perUnit?'checked':'')+' style="width:auto;cursor:pointer;accent-color:var(--accent)"></td><td><button class="del-btn" onclick="removeTplRow(\''+transport+'\','+i+')">&times;</button></td>';tbody.appendChild(tr);});}
 function collectTplItems(transport){const items=[];document.querySelectorAll('#tplBody-'+transport+' tr').forEach(tr=>{items.push({name:tr.querySelector('[data-f=name]')?.value||'',value:tr.querySelector('[data-f=value]')?.value||'',currency:tr.querySelector('[data-f=currency]')?.value||'USD',perUnit:tr.querySelector('[data-f=perUnit]')?.checked||false});});return items;}
 function addTplRow(transport){const name=document.getElementById('newTplName-'+transport)?.value.trim();if(!name)return;const items=collectTplItems(transport);items.push({name,value:V('newTplVal-'+transport),currency:V('newTplCur-'+transport)||'USD',perUnit:document.getElementById('newTplPU-'+transport)?.checked});renderTplTable(transport,items);SV('newTplName-'+transport,'');SV('newTplVal-'+transport,'');}
 function removeTplRow(transport,i){const items=collectTplItems(transport);items.splice(i,1);renderTplTable(transport,items);}
-function saveTplBlock(transport){const line=V('tplLine'),port=V('tplPort'),ctype=V('tplCtype-'+transport)||'ALL';if(port){const ports=getPorts();if(!ports.includes(port)){ports.push(port);savePorts(ports);loadPorts();}}saveTemplateStore(line,port,ctype,transport,collectTplItems(transport));const btn=event.target;const orig=btn.textContent;btn.textContent='\u2713 \u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e!';btn.style.background='var(--green)';btn.style.color='#000';setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},1600);}
+function saveTplBlock(transport){const line=V('tplLine'),port=V('tplPort'),ctype=V('tplCtype-'+transport)||'ALL';if(port){const ports=getPorts();if(!ports.includes(port)){ports.push(port);savePorts(ports);loadPorts();}}const items=collectTplItems(transport);saveTemplateStore(line,port,ctype,transport,items);saveTemplateToCloud(line,port,ctype,transport,items);const btn=event.target;const orig=btn.textContent;btn.textContent='\u2713 \u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e!';btn.style.background='var(--green)';btn.style.color='#000';setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},1600);}
 function copyTplModal(transport){window._copyTplTransport=transport;loadLines();SV('copyToPort',V('tplPort'));SV('copyToCtype',V('tplCtype-'+transport)||'ALL');document.getElementById('copyTplSrcLabel').textContent='\u00ab'+TRANSPORT_LABEL[transport]+'\u00bb';document.getElementById('copyTplTransportInfo').textContent='\u0422\u0440\u0430\u043d\u0441\u043f: '+TRANSPORT_LABEL[transport];document.getElementById('modalCopyTpl').classList.add('open');}
 function confirmCopyTpl(){const transport=window._copyTplTransport,srcLine=V('tplLine'),srcPort=V('tplPort'),srcCtype=V('tplCtype-'+transport)||'ALL',destLine=V('copyToLine'),destPort=V('copyToPort'),destCtype=V('copyToCtype')||'ALL';saveTemplateStore(destLine,destPort,destCtype,transport,getTemplate(srcLine,srcPort,srcCtype,transport));closeModal('modalCopyTpl');alert('\u2713 \u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e!');}
 function refreshTemplatesTab(){loadLines();loadPorts();renderLinesChips();renderPortsChips();loadAllTemplateBlocks();}
@@ -543,7 +875,7 @@ function addCostRowToPanel(name,value,currency,perUnit,transport){name=name||'';
 function getCostsForPanel(panel){const costs=[];document.querySelectorAll('#costBody-'+panel+' tr').forEach(tr=>{const n=tr.querySelector('input')?.value;costs.push({name:n||'',value:parseFloat(tr.querySelector('.costValue')?.value)||0,currency:tr.querySelector('.currency')?.value||'USD',perUnit:tr.querySelector('.perUnit')?.checked||false,transport:panel});});return costs.filter(c=>c.name||c.value);}
 function getAllCosts(){return['rail','tent','auto','common'].flatMap(p=>getCostsForPanel(p));}
 function getCosts(){return getAllCosts();}
-function loadTemplateCosts(){const line=V('line'),port=V('portLoad');if(!line)return;const routes=getRoutes();const ctypes=[...new Set(routes.map(r=>r.ctype))];const ctype=ctypes.length===1?ctypes[0]:'ALL';['rail','tent','auto'].forEach(transport=>{document.getElementById('costBody-'+transport).innerHTML='';getTemplate(line,port,ctype,transport).forEach(c=>addCostRowToPanel(c.name,c.value,c.currency,c.perUnit,transport));});}
+async function loadTemplateCosts(){const line=V('line'),port=V('portLoad');if(!line)return;const routes=getRoutes();const ctypes=[...new Set(routes.map(r=>r.ctype))];const ctype=ctypes.length===1?ctypes[0]:'ALL';for(const transport of ['rail','tent','auto']){document.getElementById('costBody-'+transport).innerHTML='';let items=null;if(sb&&currentUser){items=await loadTemplateFromCloud(line,port,ctype,transport);}if(!items||!items.length){items=getTemplate(line,port,ctype,transport);}items.forEach(c=>addCostRowToPanel(c.name,c.value,c.currency,c.perUnit,transport));}}
 
 // === CURRENCY ===
 function toUSD(val,cur){if(cur==='EUR')return val*1.19;if(cur==='UAH')return val/40;return val;}
@@ -583,7 +915,22 @@ function fmtNum(n){return(parseFloat(n)||0).toLocaleString('en-US',{minimumFract
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 
 // === HISTORY ===
-function saveRecord(){if(!window.lastSummaryRows?.length){alert('\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0420\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044c');return;}const records=JSON.parse(localStorage.getItem('fc_history')||'[]');const transports=[...new Set(getRoutes().map(r=>r.transport))].join(', ');records.unshift({date:new Date().toLocaleDateString('ru-RU'),client:V('client'),booking:V('booking'),line:V('line'),port:V('portLoad'),transport:transports,total:window.lastTotal,margin:parseFloat(V('margin'))||0,costs:getAllCosts(),routes:getRoutes()});localStorage.setItem('fc_history',JSON.stringify(records.slice(0,100)));const btn=event.target;const orig=btn.textContent;btn.textContent='\u2713 \u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e';btn.style.background='var(--green)';btn.style.color='#000';setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},1600);}
+function saveRecord(){if(!window.lastSummaryRows?.length){alert('\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0420\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044c');return;}const transports=[...new Set(getRoutes().map(r=>r.transport))].join(', ');const rec={date:new Date().toLocaleDateString('ru-RU'),client:V('client'),booking:V('booking'),line:V('line'),port:V('portLoad'),transport:transports,total:window.lastTotal,margin:parseFloat(V('margin'))||0,costs:getAllCosts(),routes:getRoutes()};const records=JSON.parse(localStorage.getItem('fc_history')||'[]');records.unshift(rec);localStorage.setItem('fc_history',JSON.stringify(records.slice(0,100)));saveCalcToCloud(rec);const btn=event.target;const orig=btn.textContent;btn.textContent='\u2713 \u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e';btn.style.background='var(--green)';btn.style.color='#000';setTimeout(()=>{btn.textContent=orig;btn.style.background='';btn.style.color='';},1600);}
+async function renderHistoryCloud(){
+  if(!sb||!currentUser){renderHistory();return;}
+  let records=await loadCalcsFromCloud();
+  const search=(document.getElementById('historySearch')?.value||'').toLowerCase(),filterLine=V('historyFilterLine'),filterTransport=V('historyFilterTransport');
+  const lf=document.getElementById('historyFilterLine');
+  if(lf&&lf.options.length<=1){[...new Set(records.map(r=>r.line).filter(Boolean))].forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;lf.appendChild(o);});}
+  if(search)records=records.filter(r=>(r.client||'').toLowerCase().includes(search)||(r.booking||'').toLowerCase().includes(search));
+  if(filterLine)records=records.filter(r=>r.line===filterLine);
+  if(filterTransport)records=records.filter(r=>(r.transport||'').includes(filterTransport));
+  const tbody=document.getElementById('historyBody');tbody.innerHTML='';
+  if(!records.length){tbody.innerHTML='<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:24px">\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043f\u0443\u0441\u0442\u0430</td></tr>';return;}
+  records.forEach((r,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td>'+r.date+'</td><td>'+(r.client||'\u2014')+'</td><td>'+(r.booking||'\u2014')+'</td><td><span class="badge badge-amber">'+(r.line||'\u2014')+'</span></td><td>'+(r.transport||'\u2014')+'</td><td style="font-size:10px;color:var(--muted)">'+(r.createdByEmail||'')+'</td><td style="font-weight:600;color:var(--accent)">'+((r.total||0).toFixed(2))+' $</td><td><button class="btn btn-secondary btn-sm" onclick="loadCloudRecord('+i+',cloudHistoryCache)">&#8617;</button></td>';tbody.appendChild(tr);});
+  window.cloudHistoryCache=records;
+}
+function loadCloudRecord(i,records){const r=records[i];if(!r)return;SV('client',r.client||'');SV('booking',r.booking||'');SV('margin',r.margin||0);SV('marginInternal',r.margin||0);if(r.port)SV('portLoad',r.port);['rail','tent','auto','common'].forEach(t=>document.getElementById('costBody-'+t).innerHTML='');(r.costs||[]).forEach(c=>addCostRowToPanel(c.name,c.value,c.currency,c.perUnit,c.transport||'common'));document.getElementById('routes').innerHTML='';routeCounter=0;(r.routes||[]).forEach(rt=>{addRoute();const cards=document.querySelectorAll('.route-card'),card=cards[cards.length-1];card.querySelector('.r-from').value=rt.from||'';card.querySelector('.r-to').value=rt.to||'';card.querySelector('.r-ctype').value=rt.ctype||'20DV';card.querySelector('.r-qty').value=rt.qty||1;if(rt.transport)card.querySelector('.r-transport').value=rt.transport;});document.querySelectorAll('.tab')[0].click();}
 function renderHistory(){let records=JSON.parse(localStorage.getItem('fc_history')||'[]');const search=(document.getElementById('historySearch')?.value||'').toLowerCase(),filterLine=V('historyFilterLine'),filterTransport=V('historyFilterTransport');const lf=document.getElementById('historyFilterLine');if(lf&&lf.options.length<=1){[...new Set(records.map(r=>r.line).filter(Boolean))].forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;lf.appendChild(o);});}if(search)records=records.filter(r=>(r.client||'').toLowerCase().includes(search)||(r.booking||'').toLowerCase().includes(search));if(filterLine)records=records.filter(r=>r.line===filterLine);if(filterTransport)records=records.filter(r=>(r.transport||'').includes(filterTransport));const tbody=document.getElementById('historyBody');tbody.innerHTML='';if(!records.length){tbody.innerHTML='<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:24px">\u0418\u0441\u0442\u043e\u0440\u0438\u044f \u043f\u0443\u0441\u0442\u0430</td></tr>';return;}records.forEach((r,i)=>{const allR=JSON.parse(localStorage.getItem('fc_history')||'[]');const realIdx=allR.findIndex(rec=>rec.date===r.date&&rec.booking===r.booking&&rec.total===r.total);const tr=document.createElement('tr');tr.innerHTML='<td>'+r.date+'</td><td>'+(r.client||'\u2014')+'</td><td>'+(r.booking||'\u2014')+'</td><td><span class="badge badge-amber">'+(r.line||'\u2014')+'</span></td><td>'+(r.transport||'\u2014')+'</td><td style="font-weight:600;color:var(--accent)">'+((r.total||0).toFixed(2))+' $</td><td><button class="btn btn-secondary btn-sm" onclick="loadRecord('+realIdx+')">&#8617; \u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c</button></td>';tbody.appendChild(tr);});}
 function loadRecord(i){const records=JSON.parse(localStorage.getItem('fc_history')||'[]'),r=records[i];if(!r)return;SV('client',r.client||'');SV('booking',r.booking||'');SV('margin',r.margin||0);SV('marginInternal',r.margin||0);if(r.port)SV('portLoad',r.port);['rail','tent','auto','common'].forEach(t=>document.getElementById('costBody-'+t).innerHTML='');(r.costs||[]).forEach(c=>addCostRowToPanel(c.name,c.value,c.currency,c.perUnit,c.transport||'common'));document.getElementById('routes').innerHTML='';routeCounter=0;(r.routes||[]).forEach(rt=>{addRoute();const cards=document.querySelectorAll('.route-card'),card=cards[cards.length-1];card.querySelector('.r-from').value=rt.from||'';card.querySelector('.r-to').value=rt.to||'';card.querySelector('.r-ctype').value=rt.ctype||'20DV';card.querySelector('.r-qty').value=rt.qty||1;if(rt.transport)card.querySelector('.r-transport').value=rt.transport;});document.querySelectorAll('.tab')[0].click();}
 function clearHistory(){if(confirm('\u041e\u0447\u0438\u0441\u0442\u0438\u0442\u044c \u0432\u0441\u044e \u0438\u0441\u0442\u043e\u0440\u0438\u044e?')){localStorage.removeItem('fc_history');renderHistory();}}
